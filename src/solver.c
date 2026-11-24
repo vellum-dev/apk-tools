@@ -379,6 +379,8 @@ static bool is_provider_auto_selectable(struct apk_provider *p)
 	if (p->version != &apk_atom_null) return true;
 	if (p->pkg->provider_priority) return true;
 	if (p->pkg->name->ss.requirers) return true;
+	if (p->pkg->ipkg && p->pkg->ss.pkg_selectable &&
+	    !(p->pkg->ss.solver_flags & APK_SOLVERF_REMOVE)) return true;
 	return false;
 }
 
