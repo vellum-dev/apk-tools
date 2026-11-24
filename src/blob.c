@@ -98,7 +98,7 @@ static uint32_t murmur3_32(const void *pkey, uint32_t len, uint32_t seed)
 	int i;
 
 	for (i = 0; i < nblocks; i++, key += 4) {
-		k  = apk_unaligned_u32(key);
+		k  = apk_unaligned_le32(key);
 		k *= c1;
 		k  = rotl32(k, 15);
 		k *= c2;
@@ -187,7 +187,7 @@ int apk_blob_subst(char *buf, size_t sz, apk_blob_t fmt, int (*res)(void *ctx, a
 
 	while (apk_blob_split(fmt, var_start, &prefix, &key)) {
 		apk_blob_push_blob(&to, prefix);
-		if (APK_BLOB_IS_NULL(to)) return -ENOBUFS;
+		if (APK_BLOB_IS_NULL(to)) return -APKE_BUFFER_SIZE;
 		if (!apk_blob_split(key, var_end, &key, &fmt)) return -APKE_FORMAT_INVALID;
 		char *max_advance = to.ptr + to.len;
 		if (apk_blob_split(key, colon, &key, &len)) {
@@ -203,7 +203,7 @@ int apk_blob_subst(char *buf, size_t sz, apk_blob_t fmt, int (*res)(void *ctx, a
 	}
 	apk_blob_push_blob(&to, fmt);
 	apk_blob_push_blob(&to, APK_BLOB_PTR_LEN("", 1));
-	if (APK_BLOB_IS_NULL(to)) return -ENOBUFS;
+	if (APK_BLOB_IS_NULL(to)) return -APKE_BUFFER_SIZE;
 	return to.ptr - buf - 1;
 }
 

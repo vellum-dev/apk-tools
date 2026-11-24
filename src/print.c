@@ -85,6 +85,7 @@
 	func(APKE_REPO_SYNTAX,		"repositories file syntax error") \
 	func(APKE_REPO_KEYWORD,		"unsupported repositories file keyword") \
 	func(APKE_REPO_VARIABLE,	"undefined repositories file variable") \
+	func(APKE_BUFFER_SIZE,		"internal buffer too small") \
 
 const char *apk_error_str(int error)
 {
@@ -369,7 +370,7 @@ static ssize_t progress_read(struct apk_istream *is, void *ptr, size_t size)
 static int progress_close(struct apk_istream *is)
 {
 	struct apk_progress_istream *pis = container_of(is, struct apk_progress_istream, is);
-	return apk_istream_close(pis->pis);
+	return apk_istream_close_error(pis->pis, is->err);
 }
 
 static const struct apk_istream_ops progress_istream_ops = {
@@ -397,9 +398,32 @@ struct apk_istream *apk_progress_istream(struct apk_progress_istream *pis, struc
 void apk_print_indented_init(struct apk_indent *i, struct apk_out *out, int err)
 {
 	*i = (struct apk_indent) {
-		.f = err ? out->err : out->out,
-		.width = apk_out_get_width(out),
+		.out = out,
+		.err = err,
 	};
+}
+
+static int apk_indent_vfprint(struct apk_indent *i, const char *fmt, va_list va)
+{
+	struct apk_out *out = i->out;
+	if (out->log) {
+		va_list va2;
+		va_copy(va2, va);
+		vfprintf(out->log, fmt, va2);
+		va_end(va2);
+	}
+	return vfprintf(i->err ? i->out->err : i->out->out, fmt, va);
+}
+
+static int apk_indent_fprint(struct apk_indent *i, const char *fmt, ...)
+{
+	va_list va;
+	int n;
+
+	va_start(va, fmt);
+	n = apk_indent_vfprint(i, fmt, va);
+	va_end(va);
+	return n;
 }
 
 void apk_print_indented_line(struct apk_indent *i, const char *fmt, ...)
@@ -407,7 +431,7 @@ void apk_print_indented_line(struct apk_indent *i, const char *fmt, ...)
 	va_list va;
 
 	va_start(va, fmt);
-	vfprintf(i->f, fmt, va);
+	apk_indent_vfprint(i, fmt, va);
 	va_end(va);
 	i->x = i->indent = 0;
 }
@@ -417,7 +441,7 @@ void apk_print_indented_group(struct apk_indent *i, int indent, const char *fmt,
 	va_list va;
 
 	va_start(va, fmt);
-	i->x = vfprintf(i->f, fmt, va);
+	i->x = apk_indent_vfprint(i, fmt, va);
 	i->indent = indent ?: (i->x + 1);
 	if (fmt[strlen(fmt)-1] == '\n') i->x = 0;
 	va_end(va);
@@ -426,7 +450,7 @@ void apk_print_indented_group(struct apk_indent *i, int indent, const char *fmt,
 void apk_print_indented_end(struct apk_indent *i)
 {
 	if (i->x) {
-		fprintf(i->f, "\n");
+		apk_indent_fprint(i, "\n");
 		i->x = i->indent = 0;
 	}
 }
@@ -434,11 +458,11 @@ void apk_print_indented_end(struct apk_indent *i)
 int apk_print_indented(struct apk_indent *i, apk_blob_t blob)
 {
 	if (i->x <= i->indent)
-		i->x += fprintf(i->f, "%*s" BLOB_FMT, i->indent - i->x, "", BLOB_PRINTF(blob));
-	else if (i->x + blob.len + 1 >= i->width)
-		i->x = fprintf(i->f, "\n%*s" BLOB_FMT, i->indent, "", BLOB_PRINTF(blob)) - 1;
+		i->x += apk_indent_fprint(i, "%*s" BLOB_FMT, i->indent - i->x, "", BLOB_PRINTF(blob));
+	else if (i->x + blob.len + 1 >= apk_out_get_width(i->out))
+		i->x = apk_indent_fprint(i, "\n%*s" BLOB_FMT, i->indent, "", BLOB_PRINTF(blob)) - 1;
 	else
-		i->x += fprintf(i->f, " " BLOB_FMT, BLOB_PRINTF(blob));
+		i->x += apk_indent_fprint(i, " " BLOB_FMT, BLOB_PRINTF(blob));
 	return 0;
 }
 

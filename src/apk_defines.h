@@ -101,6 +101,7 @@ enum {
 	APKE_REPO_SYNTAX,
 	APKE_REPO_KEYWORD,
 	APKE_REPO_VARIABLE,
+	APKE_BUFFER_SIZE,
 };
 
 static inline void *ERR_PTR(long error) { return (void*) error; }
@@ -150,27 +151,29 @@ static inline uint64_t apk_calc_installed_size(uint64_t size)
 	return ROUND_UP(size, 4096ULL);
 }
 
-#if defined(__x86_64__) || defined(__i386__)
-static inline uint32_t apk_unaligned_u32(const void *ptr)
+static inline uint16_t apk_unaligned_le16(const void *ptr)
 {
-	return *(const uint32_t *)ptr;
+	struct unaligned16 { uint16_t value; } __attribute__((packed));
+	return le16toh(((struct unaligned16 *) ptr)->value);
 }
-static inline uint64_t apk_unaligned_u64a32(const void *ptr)
+
+static inline uint32_t apk_unaligned_le32(const void *ptr)
 {
-	return *(const uint64_t *)ptr;
+	struct unaligned32 { uint32_t value; } __attribute__((packed));
+	return le32toh(((struct unaligned32 *) ptr)->value);
 }
-#else
-static inline uint32_t apk_unaligned_u32(const void *ptr)
+
+static inline uint64_t apk_unaligned_le64(const void *ptr)
 {
-	const uint8_t *p = ptr;
-	return p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+	struct unaligned64 { uint64_t value; } __attribute__((packed));
+	return le64toh(((struct unaligned64 *) ptr)->value);
 }
-static inline uint64_t apk_unaligned_u64a32(const void *ptr)
+
+static inline uint64_t apk_aligned32_le64(const void *ptr)
 {
-	const uint32_t *p = ptr;
-	return p[0] | (uint64_t)p[1] << 32;
+	struct unaligned64 { uint64_t value; } __attribute__((aligned(4)));
+	return le64toh(((struct unaligned64 *) ptr)->value);
 }
-#endif
 
 time_t apk_get_build_time(time_t);
 
@@ -178,7 +181,7 @@ struct apk_array {
 	uint32_t num;
 	uint32_t capacity : 31;
 	uint32_t allocated : 1;
-};
+} __attribute__((aligned(sizeof(void *))));
 
 extern const struct apk_array _apk_array_empty;
 

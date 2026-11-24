@@ -434,7 +434,7 @@ uint64_t adb_r_int(const struct adb *db, adb_val_t v)
 	case ADB_TYPE_INT_64:
 		ptr = adb_r_deref(db, v, 0, sizeof(uint64_t));
 		if (!ptr) return 0;
-		return le64toh(apk_unaligned_u64a32(ptr));
+		return apk_aligned32_le64(ptr);
 	default:
 		return 0;
 	}
@@ -606,12 +606,12 @@ int adb_ra_find(struct adb_obj *arr, int cur, struct adb_obj *tmpl)
 		unsigned m, l = ADBI_FIRST, r = adb_ra_num(arr) + 1;
 		while (l < r) {
 			m = (l + r) / 2;
-			if (adb_ro_cmpobj(tmpl, adb_ro_obj(arr, m, &obj), ADB_OBJCMP_INDEX) < 0)
+			if (adb_ro_cmpobj(tmpl, adb_ro_obj(arr, m, &obj), ADB_OBJCMP_INDEX) <= 0)
 				r = m;
 			else
 				l = m + 1;
 		}
-		cur = r - 1;
+		cur = r;
 	} else {
 		cur++;
 	}
@@ -1185,7 +1185,7 @@ int adb_s_field_subst(void *ctx, apk_blob_t var, apk_blob_t *to)
 		return -APKE_ADB_SCHEMA;
 	}
 	if (done.ptr != to->ptr) {
-		if (done.len > to->len) return -ENOBUFS;
+		if (done.len > to->len) return -APKE_BUFFER_SIZE;
 		memcpy(to->ptr, done.ptr, done.len);
 	}
 	to->ptr += done.len;

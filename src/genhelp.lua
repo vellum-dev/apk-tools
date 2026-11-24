@@ -21,6 +21,33 @@ Applet pages: apk-*.8.scd
  - From OPTIONS take each option and it's first sentence (within the first line)
 --]]
 
+-- Take the first sentence of a (possibly multi-line) description.
+-- stop at ". " or a trailing ".".
+function first_sentence(text)
+	local i = text:find("%.%s")
+	if not i then i = text:find("%.$") end
+	if i then text = text:sub(1, i - 1) end
+	return text
+end
+
+-- Name completion rule per applet
+applet_argument_completion = {
+	add="available",
+	del="installed",
+	dot="available",
+	fetch="available",
+	fix="installed",
+	index="available",
+	info="available",
+	list="available",
+	manifest="available",
+	mkndx="available",
+	policy="available",
+	query="available",
+	search="available",
+	upgrade="installed",
+}
+
 local scdoc = {
 	usage_prefix = "Usage: ",
 }
@@ -168,7 +195,7 @@ function scapp:compress(data)
 		f:write(data)
 		f:close()
 
-		local p = io.popen(('gzip -%d < %s'):format(level, tmp), 'r')
+		local p = io.popen(('gzip -n%d < %s'):format(level, tmp), 'r')
 		if p ~= nil then
 			ret = p:read("*all")
 			p:close()
@@ -187,8 +214,8 @@ function scapp:main(arg)
 	for _, fn in ipairs(arg) do
 		if fn == '--debug' then
 			self.debug = true
-		elseif fn == '--format=bash' then
-			self.format = "bash"
+		elseif fn:match("^%-%-format=") then
+			self.format = fn:match("^%-%-format=(.*)$")
 		else
 			doc = new_scdoc()
 			doc:parse(fn)

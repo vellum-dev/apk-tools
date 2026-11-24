@@ -338,7 +338,7 @@ int apk_deps_write_layer(struct apk_database *db, struct apk_dependency_array *d
 		apk_blob_push_dep(&blob, db, dep);
 
 		blob = apk_blob_pushed(APK_BLOB_BUF(tmp), blob);
-		if (APK_BLOB_IS_NULL(blob) || 
+		if (APK_BLOB_IS_NULL(blob) ||
 		    apk_ostream_write(os, blob.ptr, blob.len) < 0)
 			return -1;
 
@@ -759,11 +759,7 @@ int apk_ipkg_run_script(struct apk_installed_package *ipkg,
 	if (!db->memfd_failed) {
 		/* Linux kernel >= 6.3 */
 		fd = memfd_create(fn, MFD_EXEC|MFD_ALLOW_SEALING);
-		if (fd < 0 && errno == EINVAL) {
-			/* Linux kernel < 6.3 */
-			fd = memfd_create(fn, MFD_ALLOW_SEALING);
-			if (fd < 0) db->memfd_failed = 1;
-		}
+		if (fd < 0) db->memfd_failed = 1;
 	}
 	if (!db->script_dirs_checked) {
 		if (fd < 0 && apk_make_dirs(root_fd, script_exec_dir, 0700, 0755) < 0) {
@@ -791,7 +787,8 @@ int apk_ipkg_run_script(struct apk_installed_package *ipkg,
 		fd = -1;
 	} else {
 #ifdef F_ADD_SEALS
-		fcntl(fd, F_ADD_SEALS, F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE);
+		fcntl(fd, F_ADD_SEALS, F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW
+			| F_SEAL_WRITE | F_SEAL_FUTURE_WRITE | F_SEAL_EXEC);
 #endif
 	}
 
@@ -878,7 +875,7 @@ int apk_pkg_write_index_header(struct apk_package *info, struct apk_ostream *os)
 	apk_blob_push_blob(&bbuf, APK_BLOB_STR("\n"));
 
 	if (APK_BLOB_IS_NULL(bbuf))
-		return apk_ostream_cancel(os, -ENOBUFS);
+		return apk_ostream_cancel(os, -APKE_BUFFER_SIZE);
 
 	bbuf = apk_blob_pushed(APK_BLOB_BUF(buf), bbuf);
 	if (apk_ostream_write(os, bbuf.ptr, bbuf.len) < 0 ||
@@ -919,16 +916,15 @@ int apk_pkg_cmp_display(const struct apk_package *a, const struct apk_package *b
 
 int apk_pkg_replaces_dir(const struct apk_package *a, const struct apk_package *b)
 {
-	const struct apk_installed_package *ai = a->ipkg, *bi = b->ipkg;
-
 	/* Prefer overlay */
-	if (a->name == NULL) return APK_PKG_REPLACES_NO;
-	if (b->name == NULL) return APK_PKG_REPLACES_YES;
+	if (!a) return APK_PKG_REPLACES_NO;
+	if (!b) return APK_PKG_REPLACES_YES;
 
 	/* Upgrading package? */
 	if (a->name == b->name) return APK_PKG_REPLACES_YES;
 
 	/* Replace files on removal */
+	const struct apk_installed_package *ai = a->ipkg, *bi = b->ipkg;
 	if (ai->to_be_removed) return APK_PKG_REPLACES_YES;
 	if (bi->to_be_removed) return APK_PKG_REPLACES_NO;
 
@@ -952,16 +948,17 @@ int apk_pkg_replaces_dir(const struct apk_package *a, const struct apk_package *
 
 int apk_pkg_replaces_file(const struct apk_package *a, const struct apk_package *b)
 {
-	const struct apk_installed_package *ai = a->ipkg, *bi = b->ipkg;
 	int a_prio = -1, b_prio = -1;
 
 	/* Overlay file? Replace the ownership, but extraction will keep the overlay file. */
-	if (a->name == NULL) return APK_PKG_REPLACES_YES;
+	if (!a) return APK_PKG_REPLACES_YES;
+	if (!b) return APK_PKG_REPLACES_NO;
 
 	/* Upgrading package? */
 	if (a->name == b->name) return APK_PKG_REPLACES_YES;
 
 	/* Replace files on removal */
+	const struct apk_installed_package *ai = a->ipkg, *bi = b->ipkg;
 	if (ai->to_be_removed) return APK_PKG_REPLACES_YES;
 	if (bi->to_be_removed) return APK_PKG_REPLACES_NO;
 

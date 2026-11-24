@@ -98,7 +98,7 @@ struct apk_package {
 	unsigned char cached : 1;
 	unsigned char layer : 3;
 	uint8_t digest_alg;
-	uint8_t digest[];
+	uint8_t digest[0];
 };
 
 static inline apk_blob_t apk_pkg_hash_blob(const struct apk_package *pkg) {
@@ -115,6 +115,7 @@ int apk_package_array_qsort(const void *a, const void *b);
 #define APK_PROVIDER_FROM_PACKAGE(pkg)	  (struct apk_provider){(pkg),(pkg)->version}
 #define APK_PROVIDER_FROM_PROVIDES(pkg,p) (struct apk_provider){(pkg),(p)->version}
 
+#define PKG_VER_MAX		256
 #define PKG_VER_FMT		"%s-" BLOB_FMT
 #define PKG_VER_PRINTF(pkg)	(pkg)->name->name, BLOB_PRINTF(*(pkg)->version)
 #define PKG_VER_STRLEN(pkg)	(strlen(pkg->name->name) + 1 + pkg->version->len)

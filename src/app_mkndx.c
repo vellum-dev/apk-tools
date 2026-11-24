@@ -87,7 +87,7 @@ static int mkndx_parse_option(void *ctx, struct apk_ctx *ac, int optch, const ch
 		ictx->pkgname_spec_set = 1;
 		break;
 	case OPT_MKNDX_rewrite_arch:
-		apk_err(out, "--rewrite-arch is removed, use instead: --pkgspec-name '%s/${name}-${package}.apk'", optarg);
+		apk_err(out, "--rewrite-arch is removed, use instead: --pkgname-spec '%s/${name}-${version}.apk'", optarg);
 		return -ENOTSUP;
 	default:
 		return -ENOTSUP;
@@ -259,11 +259,18 @@ static int mkndx_main(void *pctx, struct apk_ctx *ac, struct apk_string_array *a
 	struct apk_digest digest;
 	struct apk_file_info fi;
 	apk_blob_t lookup_spec = ctx->pkgname_spec;
-	int r, errors = 0, newpkgs = 0, numpkgs;
+	int r = -1, errors = 0, newpkgs = 0, numpkgs;
 	char buf[NAME_MAX];
 	time_t index_mtime = 0;
 
-	r = -1;
+	apk_extract_init(&ctx->ectx, ac, &extract_ndxinfo_ops);
+
+	adb_init(&odb);
+	adb_w_init_alloca(&ctx->db, ADB_SCHEMA_INDEX, 8000);
+	adb_wo_alloca(&ndx, &schema_index, &ctx->db);
+	adb_wo_alloca(&ctx->pkgs, &schema_pkginfo_array, &ctx->db);
+	adb_wo_alloca(&ctx->pkginfo, &schema_pkginfo, &ctx->db);
+
 	if (!ctx->output) {
 		apk_err(out, "Please specify --output FILE");
 		goto done;
@@ -275,15 +282,6 @@ static int mkndx_main(void *pctx, struct apk_ctx *ac, struct apk_string_array *a
 		}
 		lookup_spec = ctx->filter_spec;
 	}
-
-	apk_extract_init(&ctx->ectx, ac, &extract_ndxinfo_ops);
-
-	adb_init(&odb);
-	adb_w_init_alloca(&ctx->db, ADB_SCHEMA_INDEX, 8000);
-	adb_wo_alloca(&ndx, &schema_index, &ctx->db);
-	adb_wo_alloca(&ctx->pkgs, &schema_pkginfo_array, &ctx->db);
-	adb_wo_alloca(&ctx->pkginfo, &schema_pkginfo, &ctx->db);
-
 	if (ctx->index) {
 		apk_fileinfo_get(AT_FDCWD, ctx->index, 0, &fi, 0);
 		index_mtime = fi.mtime;
@@ -330,7 +328,8 @@ static int mkndx_main(void *pctx, struct apk_ctx *ac, struct apk_string_array *a
 			if (ctx->pkgname_spec_set &&
 			    (apk_blob_subst(buf, sizeof buf, ctx->pkgname_spec, adb_s_field_subst, &ctx->pkginfo) < 0 ||
 			     strcmp(apk_last_path_segment(buf), apk_last_path_segment(arg)) != 0))
-				apk_warn(out, "%s: not matching package name specification '%s'", arg, buf);
+				apk_warn(out, "%s: not matching package name specification '" BLOB_FMT "'",
+					arg, BLOB_PRINTF(ctx->pkgname_spec));
 
 			apk_dbg(out, "%s: indexed new package", arg);
 			val = adb_wa_append_obj(&ctx->pkgs, &ctx->pkginfo);

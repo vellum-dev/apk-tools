@@ -321,7 +321,7 @@ static void pkgser_serialize_name(struct pkgser_ctx *pc, struct apk_name *name)
 
 static void pkgser_serialize_package(struct pkgser_ctx *pc, struct apk_package *pkg)
 {
-	char buf[FILENAME_MAX];
+	char buf[PKG_VER_MAX];
 	apk_ser_string(pc->ser, apk_blob_fmt(buf, sizeof buf, PKG_VER_FMT, PKG_VER_PRINTF(pkg)));
 }
 
@@ -660,13 +660,14 @@ static int ser_match_string(struct apk_serializer *ser, apk_blob_t scalar, int m
 static void pkgpkgser_match_dependency(struct pkgser_ctx *pc, struct apk_dependency_array *deps, bool provides)
 {
 	struct apk_serializer *ser = pc->ser;
-	// TODO: This dependency operator/version is not used for normal dependencies; only for provides
-	// where the provided version is matched same as normal package version.
 	struct match_ctx *m = container_of(ser, struct match_ctx, ser);
 	if (m->done_matching) return;
 	apk_array_foreach(dep, deps) {
-		if (!match_string(m, dep->name->name)) continue;
-		if (provides && !apk_version_match(*m->dep.version, m->dep.op, *dep->version)) continue;
+		if (!match_blob(m, APK_BLOB_STR(dep->name->name))) continue;
+		if (m->dep.op != APK_DEPMASK_ANY) {
+			if (provides && !apk_version_match(*m->dep.version, m->dep.op, *dep->version)) continue;
+			if (!provides && (m->dep.op != dep->op || apk_blob_compare(*m->dep.version, *dep->version))) continue;
+		}
 		m->qm.name = dep->name;
 		m->cb(m->cb_ctx, &m->qm);
 		m->has_matches = true;
@@ -941,7 +942,7 @@ static int apk_query_summarize(struct apk_ctx *ac, struct apk_query_spec *qs, st
 		}
 		apk_ser_end(ser);
 	} else if (apk_array_len(s.pkgs)) {
-		char buf[FILENAME_MAX];
+		char buf[PKG_VER_MAX];
 		apk_array_qsort(s.pkgs, apk_package_array_qsort);
 		apk_ser_start_array(ser, apk_array_len(s.pkgs));
 		apk_array_foreach_item(pkg, s.pkgs) {
