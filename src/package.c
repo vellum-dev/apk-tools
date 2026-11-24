@@ -785,6 +785,11 @@ int apk_ipkg_run_script(struct apk_installed_package *ipkg,
 	if (created) {
 		close(fd);
 		fd = -1;
+		// The script runs from the install root, where the relative path to the file under --root does not resolve
+		if (db->ctx->install_root) {
+			fd = openat(root_fd, fn, O_RDONLY);
+			if (fd < 0) goto err_errno;
+		}
 	} else {
 #ifdef F_ADD_SEALS
 		fcntl(fd, F_ADD_SEALS, F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW
